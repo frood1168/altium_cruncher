@@ -2056,13 +2056,15 @@ def _iter_schdoc_wires(schdoc) -> list[AltiumSchWire]:
     wires: list[AltiumSchWire] = []
     seen: set[int] = set()
 
+    # Exact type: buses, signal harnesses and harness bundles subclass
+    # AltiumSchWire and keep their own colors.
     for wire in getattr(schdoc, "wires", []):
-        if isinstance(wire, AltiumSchWire) and id(wire) not in seen:
+        if type(wire) is AltiumSchWire and id(wire) not in seen:
             wires.append(wire)
             seen.add(id(wire))
 
     for obj in getattr(schdoc, "all_objects", []):
-        if isinstance(obj, AltiumSchWire) and id(obj) not in seen:
+        if type(obj) is AltiumSchWire and id(obj) not in seen:
             wires.append(obj)
             seen.add(id(obj))
 

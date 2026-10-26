@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fix `clean` `normalize_wires` recoloring buses, signal harnesses, and harness
+  bundles as wires. Those records subclass `AltiumSchWire` in altium-monkey, so
+  the rule now matches the exact wire type and leaves their colors unchanged.
+
 ## 2026.10.1
 
 - Add a compact per-board PCB routing-context sidecar to `design` /

@@ -15,6 +15,10 @@ from jsonschema import Draft202012Validator
 from altium_cruncher.config_json import load_json_config
 from altium_cruncher.output_path_templates import resolve_output_relative_path
 from altium_monkey.altium_design import AltiumDesign
+from altium_monkey.altium_record_sch__bus import AltiumSchBus
+from altium_monkey.altium_record_sch__signal_harness import AltiumSchSignalHarness
+from altium_monkey.altium_record_sch__wire import AltiumSchWire
+from altium_monkey.altium_schdoc import AltiumSchDoc
 
 
 def _project_root() -> Path:
@@ -48,6 +52,16 @@ CUTOUTS_DIR = PACKAGE_ROOT / "tests" / "assets" / "projects" / "cutouts"
 CUTOUTS_PCBDOC = CUTOUTS_DIR / "input" / "cutout_multiple.PcbDoc"
 CRICKET_NODE_DIR = PACKAGE_ROOT / "tests" / "assets" / "projects" / "cricket-node"
 CRICKET_NODE_PCBDOC = CRICKET_NODE_DIR / "input" / "cricket-node-hw__B.PcbDoc"
+OV_TECH_BLOCK_DIAGRAM_SCHDOC = (
+    PACKAGE_ROOT
+    / "tests"
+    / "assets"
+    / "projects"
+    / "ov-tech-pimx8"
+    / "input"
+    / "SCH"
+    / "01_Block_Diagram.SchDoc"
+)
 
 
 def _run_cli(*args: str) -> str:
@@ -810,3 +824,37 @@ def test_clean_init_config_writes_templates_without_cleaning(tmp_path: Path) -> 
         load_json_config(pcblib_config)["schema"]
         == "altium_cruncher.pcblib.clean.config.a0"
     )
+
+
+def _colors_by_unique_id(schdoc_path: Path, *record_types: type) -> dict[str, int]:
+    """Map each record of exactly the given types to its color."""
+    return {
+        obj.unique_id: obj.color
+        for obj in AltiumSchDoc(schdoc_path).all_objects
+        if type(obj) in record_types
+    }
+
+
+def test_clean_command_recolors_only_plain_wires(tmp_path: Path) -> None:
+    """Exercise wire normalization without recoloring buses or signal harnesses."""
+    schdoc = tmp_path / OV_TECH_BLOCK_DIAGRAM_SCHDOC.name
+    shutil.copy2(OV_TECH_BLOCK_DIAGRAM_SCHDOC, schdoc)
+    config_path = tmp_path / "altium-clean.json"
+    cleaned = tmp_path / "cleaned.SchDoc"
+
+    _run_cli("clean", str(schdoc), "--init-config", "--config", str(config_path))
+    _run_cli("clean", str(schdoc), "--config", str(config_path), "-o", str(cleaned))
+
+    # Buses and signal harnesses subclass AltiumSchWire in altium-monkey.
+    wire_color = load_json_config(config_path)["normalize_wires"]["color_win32"]
+    harness_types = (AltiumSchBus, AltiumSchSignalHarness)
+    wires_before = _colors_by_unique_id(schdoc, AltiumSchWire)
+    harnesses_before = _colors_by_unique_id(schdoc, *harness_types)
+    assert wires_before and harnesses_before
+    assert set(wires_before.values()) != {wire_color}
+    assert wire_color not in harnesses_before.values()
+
+    wires_after = _colors_by_unique_id(cleaned, AltiumSchWire)
+    assert wires_after.keys() == wires_before.keys()
+    assert set(wires_after.values()) == {wire_color}
+    assert _colors_by_unique_id(cleaned, *harness_types) == harnesses_before
